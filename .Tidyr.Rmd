@@ -1,0 +1,127 @@
+---
+title: "Tidyr"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+```
+
+## Design and intervention: 
+We will be working with a dataset collected by Catherine on MTurk. THis is a between-subject design, where each subject read one of three framings introducing universal basic income policy proposals in the US. The three conditions included one which emphasized how universal basic income can expand freedom and individual autonomy (“freedom” condition), one which emphasized security against an unstable economy in the face of automation and other economic shocks (“security” condition), and one which described the policy details alone (“control” condition).
+
+Outcomes: They assessed a number of other variables:
+
+-ratings of “support” for the policy on a scale of 1-7 (1=strongly oppose to 7=strongly support). 
+
+-word stem completion task (vars starting with “word_”). This task is intended to measure whether experimental conditions are more likely to increase salience of welfare stereotypes by determining the proportion of words written that match the welfare stereotype target words (of which there are 9 excluding the filler items). The target word is written in the second half of the “word_” variable. 
+
+```{r Load Data}
+data = read.csv('ubi_for_tidy.csv')
+```
+
+```{r Check data}
+colnames(data)
+```
+
+## Tidy!
+
+Let's get this data clean. There are a lot of variables we could look at, and it probably
+doesn't make sense for us to try and make one dataframe to attack all possible questions. So
+let's focus on analyzing the word columns for now.
+
+In the word stem task, participants are given a stem (like "home") and asked to complete it.
+The study was interested in how often the participants completed the word in a particular way
+("home" -> "homeless"), and how the condition affected the participant's completion. How should
+we go about changing our data to do this?
+
+```{r clean our data}
+tidy_words <- data %>%
+  gather('word_type', 'word_str', starts_with('word_')) %>%
+  select(-starts_with('query'), -starts_with('polit'), -starts_with('stigma'))
+tidy_words$word_type = gsub("word_", "", tidy_words$word_type)
+tidy_words$word_str = sapply(tidy_words$word_str, tolower)
+```
+
+Ok, now that we have the data in a useful format, let's try to calculate something. Let's
+see if the mean proportion match differs between conditions
+
+```{r analyze mean}
+mean_results = tidy_words %>%
+  group_by(condition, V1) %>%
+  summarise("proportion_match" = mean(word_str==word_type))
+```
+Ok, that's great, but what if we want to see the condition different for each subject?
+
+```{r find mean proportion m}
+mean_results_by_subj = tidy_words %>%
+  group_by(condition, V1) %>%
+  summarise("proportion_match" = mean(word_str==word_type))
+```
+
+Great! Now calculate the standard deviation of each condition mean across subjects. Do this in
+two ways - first by using the output of your last analysis, and second by adding another pipe to the
+above analysis. Do you get the same results?
+
+```{r sd: two ways}
+tidy_words %>%
+  group_by(condition, V1) %>%
+  summarise("proportion_match" = mean(word_str==word_type)) %>%
+  summarise('sd_subjmean' = sd(proportion_match))
+
+mean_results_by_subj %>%
+  group_by(condition) %>%
+  summarise(mean_sd = sd(proportion_match))
+```
+Ok, let's try and plot that...
+
+```{r meanresults boxplot}
+mean_results_by_subj %>%
+  ggplot(aes(x = condition, y = proportion_match)) + 
+  geom_boxplot()
+```
+
+Great! Right now it doesn't look like the condition mattered too much in the proportion match.
+What if we thought that there was an interaction between condition and gender (for some reason)?
+
+Let's start by looking at gender. How do our subjects break down? (Hint, you can use "tally")
+
+```{r tally gender}
+gender_tally = tally(group_by(data,gender))
+```
+
+Looks like most of our participants are in two categories. The left over participants will not be
+useful - we don't have the power to look at them. How can you remove them? 
+
+After you remove them, plot using a boxplot like before (you need to group again by condition and subjects, as well as gender!). 
+
+We want a plot with conditions just like before, but this time we want to separate by gender as well. Reuse the code from above and add "color=gender" as one of the arguments to the aesthetic attribute.
+
+```{r remove class}
+interaction_data = mutate(tidy_words, 'match' = word_type==word_str)
+interaction_data = interaction_data %>% 
+  filter(gender != "Other")
+
+interaction_data %>%
+  group_by(condition, V1, gender) %>%
+  summarise("proportion_match" = mean(word_str==word_type)) %>%
+  ggplot(aes(x = condition, y = proportion_match, color=gender)) + 
+      geom_boxplot()
+```
+Not looking good... Let's affirm our null effect with...statistics!
+
+If you haven't used lm don't worry - it's just a function that makes it easy to perform linear regression. You should read the
+first string as "match is a function of an interaction between gender and condition".
+
+``` {r lm}
+rs = lm('match ~ gender*condition', data=interaction_data)
+summary(rs)
+```
+
+
+
+
