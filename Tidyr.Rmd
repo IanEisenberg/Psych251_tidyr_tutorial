@@ -41,10 +41,10 @@ we go about changing our data to do this?
 
 ```{r clean our data}
 tidy_words <- data %>%
-  gather('word_type', 'word_str', starts_with('word_')) %>%
-  select(-starts_with('query'), -starts_with('polit'), -starts_with('stigma'))
+  gather('word_type', 'word_str', starts_with('word_'), -contains('filter')) %>%
+  select(-starts_with('query'), -starts_with('polit'), -starts_with('stigma'), -contains('filter'))
 tidy_words$word_type = gsub("word_", "", tidy_words$word_type)
-tidy_words$word_str = sapply(tidy_words$word_str, tolower)
+tidy_words$word_str = tolower(tidy_words$word_str)
 ```
 
 Ok, now that we have the data in a useful format, let's try to calculate something. Let's
@@ -52,7 +52,7 @@ see if the mean proportion match differs between conditions
 
 ```{r analyze mean}
 mean_results = tidy_words %>%
-  group_by(condition, V1) %>%
+  group_by(condition) %>%
   summarise("proportion_match" = mean(word_str==word_type))
 ```
 Ok, that's great, but what if we want to see the condition different for each subject?
